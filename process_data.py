@@ -1,26 +1,44 @@
 import pandas as pd
+import glob
+from datetime import datetime
+from pathlib import Path
 
-# Read the three CSV files
-df1 = pd.read_csv("data/daily_sales_data_0.csv")
-df2 = pd.read_csv("data/daily_sales_data_1.csv")
-df3 = pd.read_csv("data/daily_sales_data_2.csv")
 
-# Combine them into one DataFrame
-df = pd.concat([df1, df2, df3], ignore_index=True)
+files = glob.glob("data/*.csv")
 
-# Keep only Pink Morsel products
-df = df[df["product"] == "Pink Morsel"]
+df_list = []
 
-# Convert price from "$2.50" to 2.50
-df["price"] = df["price"].replace("[$]", "", regex=True).astype(float)
+if not files:
+    raise FileNotFoundError("No CSV files found in the data folder.")
 
-# Create Sales column
-df["Sales"] = df["quantity"] * df["price"]
+for file in files:
+    df = pd.read_csv(file)
+    df_list.append(df)
 
-# Keep only the required columns
-output = df[["Sales", "date", "region"]]
 
-# Save the output
-output.to_csv("output.csv", index=False)
+final_df = pd.concat(df_list, ignore_index=True)
+final_df.columns = final_df.columns.str.strip()
 
-print("✅ output.csv created successfully!")
+final_df = final_df[
+    final_df["product"].str.lower().str.strip() == "pink morsel"
+].copy()
+final_df["price"] = final_df["price"].replace(r"[\$,]", "", regex=True).astype(float)
+final_df["Sales"] = final_df["price"] * final_df["quantity"]
+final_df = final_df[["Sales", "date", "region"]]
+
+output_path = Path("output.csv")
+
+try:
+    final_df.to_csv(output_path, index=False)
+except PermissionError:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = Path(f"output_{timestamp}.csv")
+    final_df.to_csv(output_path, index=False)
+    print(
+        "output.csv is locked or not writable. "
+        f"Created {output_path} instead. Close output.csv if it is open in Excel."
+    )
+
+
+print(f"{output_path} created successfully")
+print(final_df.head())
